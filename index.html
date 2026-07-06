@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>الملخص اليومي</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1115;
+    --bg-card: #171a21;
+    --bg-card-hover: #1d2129;
+    --border: #262b35;
+    --text: #e8eaed;
+    --text-dim: #9aa0ac;
+    --accent: #5b8cff;
+    --error: #ff6b6b;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Tahoma, "Cairo", system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+  }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 16px 64px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  header h1 {
+    font-size: 1.5rem;
+    margin: 0 0 4px;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+
+  .section-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 1.05rem;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: right;
+  }
+
+  .section-toggle:hover {
+    background: var(--bg-card-hover);
+  }
+
+  .section-toggle .label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-toggle .chevron {
+    transition: transform 0.2s ease;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .section.open .section-toggle .chevron {
+    transform: rotate(180deg);
+  }
+
+  .section-body {
+    display: none;
+    padding: 0 18px 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .section.open .section-body {
+    display: block;
+    padding-top: 12px;
+  }
+
+  ul.headlines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  ul.headlines li {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  ul.headlines li:last-child {
+    border-bottom: none;
+  }
+
+  ul.headlines a {
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.98rem;
+    display: block;
+  }
+
+  ul.headlines a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+
+  .source-tag {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .state-msg {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    padding: 8px 0;
+  }
+
+  .state-msg.error {
+    color: var(--error);
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-left: 8px;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  footer {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    margin-top: 24px;
+  }
+
+  /* الوضع الفاتح، يُفعّل تلقائيًا إذا كان نظام المستخدم يفضّل الوضع الفاتح */
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f5f6f8;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f0f1f4;
+      --border: #e2e4e9;
+      --text: #1a1d23;
+      --text-dim: #666b74;
+    }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>📰 الملخص اليومي</h1>
+    <p>أحدث العناوين فقط، من مصادر رسمية وموثوقة</p>
+  </header>
+
+  <div id="sections"></div>
+
+  <footer>
+    يتم جلب البيانات مباشرة من مصادر RSS الرسمية عبر خدمة تحويل RSS إلى JSON.
+  </footer>
+</main>
+
+<script>
+/*
+ * ============================================================
+ *  إعداد الأقسام (Config)
+ * ============================================================
+ * لإضافة قسم جديد مستقبلاً (مثلاً "أخبار رياضية أخرى" أو "أخبار تقنية"):
+ * فقط أضف كائن جديد إلى مصفوفة SECTIONS بنفس الشكل أدناه.
+ * لا حاجة لتعديل أي كود آخر في الصفحة.
+ *
+ * كل عنصر في SECTIONS:
+ *   id:    معرف فريد (يُستخدم داخليًا فقط)
+ *   title: العنوان الظاهر للمستخدم
+ *   icon:  إيموجي بسيط يظهر بجانب العنوان
+ *   feeds: مصفوفة من مصادر RSS { name, url }
+ *          name = اسم المصدر كما سيظهر للمستخدم
+ *          url  = رابط RSS الرسمي (وليس رابط الموقع العادي)
+ */
+const SECTIONS = [
+  {
+    id: "arsenal",
+    title: "أخبار نادي Arsenal",
+    icon: "⚽",
+    feeds: [
+      { name: "BBC Sport", url: "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml" },
+      { name: "The Guardian", url: "https://www.theguardian.com/football/arsenal/rss" },
+    ],
+  },
+  {
+    id: "ai",
+    title: "أخبار الذكاء الاصطناعي (AI)",
+    icon: "🤖",
+    feeds: [
+      { name: "TechCrunch", url: "https://techcrunch.com/category/artificial-intelligence/feed/" },
+      { name: "MIT Technology Review", url: "https://www.technologyreview.com/feed/" },
+    ],
+  },
+  // مثال لإضافة قسم جديد لاحقًا:
+  // {
+  //   id: "tech",
+  //   title: "أخبار تقنية عامة",
+  //   icon: "💻",
+  //   feeds: [
+  //     { name: "The Verge", url: "https://www.theverge.com/rss/index.xml" },
+  //   ],
+  // },
+];
+
+/*
+ * ============================================================
+ *  خدمة تحويل RSS إلى JSON
+ * ============================================================
+ * GitHub Pages لا يدعم أي backend، وأغلب مصادر RSS لا تسمح بطلبها
+ * مباشرة من المتصفح بسبب سياسة CORS. لذلك نستخدم خدمة وسيطة مجانية
+ * تجلب الـ RSS وتحوّله إلى JSON قابل للاستخدام مباشرة.
+ *
+ * الخدمة المستخدمة هنا: https://rss2json.com (الحد المجاني بدون مفتاح
+ * محدود بعدد طلبات يومي بسيط، وهو غالبًا كافٍ للاستخدام الشخصي).
+ *
+ * لاستبدال الخدمة أو إضافة مفتاح API الخاص بك لاحقًا (لرفع الحد المسموح):
+ *   1. سجّل حساب مجاني على https://rss2json.com واحصل على API key.
+ *   2. ضع المفتاح في المتغير RSS2JSON_API_KEY أدناه.
+ *   3. إذا رغبت باستخدام خدمة بديلة (مثل api.allorigins.win أو خدمتك
+ *      الخاصة)، عدّل فقط دالة buildProxyUrl() بالأسفل لتُرجع الرابط
+ *      الجديد، مع الإبقاء على أن الاستجابة يجب أن تحتوي على
+ *      مصفوفة items بها title و link لكل خبر (أو عدّل parseFeedResponse
+ *      لتتوافق مع شكل استجابة الخدمة الجديدة).
+ */
+const RSS2JSON_API_KEY = ""; // اتركه فارغًا لاستخدام الحد المجاني بدون مفتاح
+
+function buildProxyUrl(feedUrl) {
+  const base = "https://api.rss2json.com/v1/api.json";
+  const params = new URLSearchParams({ rss_url: feedUrl });
+  if (RSS2JSON_API_KEY) params.set("api_key", RSS2JSON_API_KEY);
+  return `${base}?${params.toString()}`;
+}
+
+// يحوّل استجابة rss2json إلى شكل موحّد: [{ title, link, pubDate, sourceName }]
+function parseFeedResponse(json, sourceName) {
+  if (!json || json.status !== "ok" || !Array.isArray(json.items)) {
+    throw new Error("استجابة غير صالحة من الخدمة");
+  }
+  return json.items.map((item) => ({
+    title: item.title || "(بدون عنوان)",
+    link: item.link,
+    pubDate: item.pubDate ? new Date(item.pubDate) : null,
+    sourceName,
+  }));
+}
+
+const MAX_HEADLINES_PER_SECTION = 12;
+
+/*
+ * ============================================================
+ *  بناء واجهة الأقسام
+ * ============================================================
+ */
+const sectionsContainer = document.getElementById("sections");
+
+SECTIONS.forEach((section) => {
+  const wrapper = document.createElement("div");
+  wrapper.className = "section";
+  wrapper.id = `section-${section.id}`;
+
+  wrapper.innerHTML = `
+    <button class="section-toggle" data-id="${section.id}">
+      <span class="label">${section.icon} ${section.title}</span>
+      <span class="chevron">▾</span>
+    </button>
+    <div class="section-body">
+      <div class="state-msg" data-role="state"></div>
+      <ul class="headlines" data-role="list"></ul>
+    </div>
+  `;
+
+  sectionsContainer.appendChild(wrapper);
+
+  const toggleBtn = wrapper.querySelector(".section-toggle");
+  toggleBtn.addEventListener("click", () => onSectionToggle(section, wrapper));
+});
+
+function onSectionToggle(section, wrapper) {
+  const isOpen = wrapper.classList.toggle("open");
+  if (!isOpen) return;
+
+  // إذا كانت العناوين محمّلة مسبقًا، لا داعي لإعادة الجلب
+  if (wrapper.dataset.loaded === "true") return;
+
+  loadSectionHeadlines(section, wrapper);
+}
+
+async function loadSectionHeadlines(section, wrapper) {
+  const stateEl = wrapper.querySelector('[data-role="state"]');
+  const listEl = wrapper.querySelector('[data-role="list"]');
+
+  stateEl.className = "state-msg";
+  stateEl.innerHTML = `جاري التحميل<span class="spinner"></span>`;
+  listEl.innerHTML = "";
+
+  try {
+    const results = await Promise.allSettled(
+      section.feeds.map(async (feed) => {
+        const res = await fetch(buildProxyUrl(feed.url));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        return parseFeedResponse(json, feed.name);
+      })
+    );
+
+    const allItems = [];
+    let failedCount = 0;
+
+    results.forEach((r) => {
+      if (r.status === "fulfilled") {
+        allItems.push(...r.value);
+      } else {
+        failedCount++;
+        console.error("فشل جلب أحد المصادر:", r.reason);
+      }
+    });
+
+    if (allItems.length === 0) {
+      throw new Error("تعذّر جلب أي عناوين من هذا القسم");
+    }
+
+    allItems.sort((a, b) => (b.pubDate || 0) - (a.pubDate || 0));
+
+    const topItems = allItems.slice(0, MAX_HEADLINES_PER_SECTION);
+    renderHeadlines(listEl, topItems);
+
+    stateEl.className = "state-msg";
+    stateEl.textContent =
+      failedCount > 0
+        ? `تعذّر تحميل ${failedCount} من أصل ${section.feeds.length} مصادر لهذا القسم.`
+        : "";
+
+    wrapper.dataset.loaded = "true";
+  } catch (err) {
+    console.error(err);
+    stateEl.className = "state-msg error";
+    stateEl.textContent = "⚠️ حدث خطأ أثناء جلب الأخبار. تحقق من اتصالك بالإنترنت وحاول مجددًا.";
+    listEl.innerHTML = "";
+  }
+}
+
+function renderHeadlines(listEl, items) {
+  listEl.innerHTML = items
+    .map(
+      (item) => `
+        <li>
+          <a href="${escapeAttr(item.link)}" target="_blank" rel="noopener noreferrer">
+            ${escapeHtml(item.title)}
+          </a>
+          <span class="source-tag">${escapeHtml(item.sourceName)}</span>
+        </li>
+      `
+    )
+    .join("");
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+function escapeAttr(str) {
+  return (str ?? "").replace(/"/g, "&quot;");
+}
+</script>
+</body>
+</html>
