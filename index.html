@@ -53,8 +53,16 @@
     margin: 0;
   }
 
-  .settings-toggle {
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
     margin-top: 14px;
+  }
+
+  .settings-toggle {
+    margin-top: 0;
     background: none;
     border: 1px solid var(--border);
     color: var(--text-dim);
@@ -68,6 +76,15 @@
   .settings-toggle:hover {
     color: var(--text);
     border-color: var(--accent);
+  }
+
+  .settings-toggle[aria-pressed="true"] {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .headline-title.translating {
+    opacity: 0.6;
   }
 
   .section {
@@ -342,7 +359,10 @@
   <header>
     <h1>📰 الملخص اليومي</h1>
     <p>أحدث العناوين فقط، من مصادر إخبارية موثوقة</p>
-    <button class="settings-toggle" id="settings-toggle-btn" type="button">⚙️ إدارة المواضيع والمصادر</button>
+    <div class="header-actions">
+      <button class="settings-toggle" id="translate-toggle-btn" type="button" aria-pressed="false">🌐 ترجمة العناوين: متوقفة</button>
+      <button class="settings-toggle" id="settings-toggle-btn" type="button">⚙️ إدارة المواضيع والمصادر</button>
+    </div>
   </header>
 
   <div id="settings-panel">
@@ -490,26 +510,78 @@ const MAX_HEADLINES_PER_SECTION = 12;
 
 /*
  * ============================================================
- *  إعدادات المستخدم (مواضيع ومصادر مضافة يدويًا)
+ *  ترجمة العناوين إلى العربية
+ * ============================================================
+ * لا يوجد backend في هذا الموقع، لذلك نستخدم نقطة نهاية Google Translate
+ * غير الرسمية (translate.googleapis.com) التي تسمح بالاستدعاء المباشر
+ * من المتصفح (CORS مفتوح) بلا حاجة لمفتاح API. هذه النقطة غير موثّقة
+ * رسميًا وقد تتوقف أو تُقيَّد مستقبلًا.
+ *
+ * لاستبدالها بخدمة ترجمة رسمية لاحقًا (مثل LibreTranslate أو DeepL أو
+ * Azure Translator)، عدّل فقط buildTranslateUrl() و parseTranslateResponse()
+ * أدناه ليطابقا شكل طلب/استجابة الخدمة الجديدة، مع الإبقاء على أن
+ * translateTitle() تُعيد نص السلسلة المترجمة كسلسلة نصية واحدة.
+ */
+function buildTranslateUrl(text) {
+  const params = new URLSearchParams({
+    client: "gtx",
+    sl: "en",
+    tl: "ar",
+    dt: "t",
+    q: text,
+  });
+  return `https://translate.googleapis.com/translate_a/single?${params.toString()}`;
+}
+
+function parseTranslateResponse(json) {
+  if (!Array.isArray(json) || !Array.isArray(json[0])) {
+    throw new Error("استجابة ترجمة غير صالحة");
+  }
+  return json[0].map((segment) => segment[0]).join("");
+}
+
+const translationCache = new Map(); // العنوان الأصلي -> العنوان المترجم (أو null لو فشلت الترجمة)
+
+async function translateTitle(text) {
+  if (translationCache.has(text)) return translationCache.get(text);
+  try {
+    const res = await fetch(buildTranslateUrl(text));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const translated = parseTranslateResponse(json);
+    translationCache.set(text, translated);
+    return translated;
+  } catch (err) {
+    console.error("تعذّرت ترجمة العنوان:", err);
+    translationCache.set(text, null);
+    return null;
+  }
+}
+
+/*
+ * ============================================================
+ *  إعدادات المستخدم (مواضيع ومصادر مضافة يدويًا + تفضيل الترجمة)
  * ============================================================
  * تُحفظ في localStorage الخاص بالمتصفح فقط. الشكل:
- *   customTopics: [{ id, title, icon, feeds: [{name, url}] }]
- *   extraFeeds:   { [sectionId]: [{name, url}] }  (مصادر أُضيفت لقسم مدمج)
+ *   customTopics:     [{ id, title, icon, feeds: [{name, url}] }]
+ *   extraFeeds:       { [sectionId]: [{name, url}] }  (مصادر أُضيفت لقسم مدمج)
+ *   translateEnabled: true/false
  */
 const STORAGE_KEY = "dailySummary.settings.v1";
 
 function loadUserSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { customTopics: [], extraFeeds: {} };
+    if (!raw) return { customTopics: [], extraFeeds: {}, translateEnabled: false };
     const parsed = JSON.parse(raw);
     return {
       customTopics: Array.isArray(parsed.customTopics) ? parsed.customTopics : [],
       extraFeeds: parsed.extraFeeds && typeof parsed.extraFeeds === "object" ? parsed.extraFeeds : {},
+      translateEnabled: Boolean(parsed.translateEnabled),
     };
   } catch (err) {
     console.error("تعذّرت قراءة الإعدادات المحفوظة", err);
-    return { customTopics: [], extraFeeds: {} };
+    return { customTopics: [], extraFeeds: {}, translateEnabled: false };
   }
 }
 
@@ -518,6 +590,9 @@ function saveUserSettings() {
 }
 
 let userSettings = loadUserSettings();
+
+// آخر عناوين تم جلبها لكل قسم، تُستخدم لإعادة العرض عند تبديل الترجمة دون إعادة جلب RSS
+const sectionItemsCache = {};
 
 function getEffectiveSections() {
   const builtinWithExtras = BUILTIN_SECTIONS.map((section) => ({
@@ -613,6 +688,7 @@ async function loadSectionHeadlines(section, wrapper) {
     allItems.sort((a, b) => (b.pubDate || 0) - (a.pubDate || 0));
 
     const topItems = allItems.slice(0, MAX_HEADLINES_PER_SECTION);
+    sectionItemsCache[section.id] = topItems;
     renderHeadlines(listEl, topItems);
 
     stateEl.className = "state-msg";
@@ -646,12 +722,12 @@ function formatPubDate(pubDate) {
 
 function renderHeadlines(listEl, items) {
   listEl.innerHTML = items
-    .map((item) => {
+    .map((item, idx) => {
       const dateLabel = formatPubDate(item.pubDate);
       return `
-        <li>
+        <li data-idx="${idx}">
           <a href="${escapeAttr(item.link)}" target="_blank" rel="noopener noreferrer">
-            ${escapeHtml(item.title)}
+            <span class="headline-title">${escapeHtml(item.title)}</span>
           </a>
           <div class="meta-row">
             <span class="source-tag">${escapeHtml(item.sourceName)}</span>
@@ -661,6 +737,26 @@ function renderHeadlines(listEl, items) {
       `;
     })
     .join("");
+
+  if (userSettings.translateEnabled) {
+    items.forEach((item, idx) => applyTranslation(listEl, idx, item.title));
+  }
+}
+
+async function applyTranslation(listEl, idx, originalTitle) {
+  const titleEl = listEl.querySelector(`li[data-idx="${idx}"] .headline-title`);
+  if (!titleEl) return;
+  titleEl.classList.add("translating");
+
+  const translated = await translateTitle(originalTitle);
+
+  // قد يكون المستخدم أوقف الترجمة أو أعاد رسم القائمة أثناء الانتظار
+  if (!userSettings.translateEnabled) return;
+  const freshTitleEl = listEl.querySelector(`li[data-idx="${idx}"] .headline-title`);
+  if (!freshTitleEl) return;
+
+  freshTitleEl.classList.remove("translating");
+  if (translated) freshTitleEl.textContent = translated;
 }
 
 function escapeHtml(str) {
@@ -692,6 +788,33 @@ const manageListContainer = document.getElementById("manage-list-container");
 settingsToggleBtn.addEventListener("click", () => {
   settingsPanel.classList.toggle("open");
 });
+
+const translateToggleBtn = document.getElementById("translate-toggle-btn");
+
+function updateTranslateToggleLabel() {
+  translateToggleBtn.textContent = userSettings.translateEnabled
+    ? "🌐 ترجمة العناوين: مفعّلة"
+    : "🌐 ترجمة العناوين: متوقفة";
+  translateToggleBtn.setAttribute("aria-pressed", String(userSettings.translateEnabled));
+}
+
+translateToggleBtn.addEventListener("click", () => {
+  userSettings.translateEnabled = !userSettings.translateEnabled;
+  saveUserSettings();
+  updateTranslateToggleLabel();
+
+  // أعد رسم كل قسم مفتوح مسبقًا من العناوين المخزّنة، دون إعادة جلب RSS
+  document.querySelectorAll(".section").forEach((wrapper) => {
+    if (wrapper.dataset.loaded !== "true") return;
+    const sectionId = wrapper.id.replace(/^section-/, "");
+    const items = sectionItemsCache[sectionId];
+    if (!items) return;
+    const listEl = wrapper.querySelector('[data-role="list"]');
+    renderHeadlines(listEl, items);
+  });
+});
+
+updateTranslateToggleLabel();
 
 function isBuiltinSection(id) {
   return BUILTIN_SECTIONS.some((s) => s.id === id);
