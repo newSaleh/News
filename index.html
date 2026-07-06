@@ -152,14 +152,26 @@
     text-decoration: underline;
   }
 
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
   .source-tag {
     display: inline-block;
-    margin-top: 4px;
     font-size: 0.78rem;
     color: var(--text-dim);
     background: rgba(255, 255, 255, 0.05);
     padding: 2px 8px;
     border-radius: 999px;
+  }
+
+  .date-tag {
+    font-size: 0.78rem;
+    color: var(--text-dim);
   }
 
   .state-msg {
@@ -411,6 +423,16 @@ const BUILTIN_SECTIONS = [
       { name: "MIT Technology Review", url: "https://www.technologyreview.com/feed/" },
     ],
   },
+  {
+    id: "movies-tv",
+    title: "أخبار الأفلام والمسلسلات الأمريكية",
+    icon: "🎬",
+    feeds: [
+      { name: "Variety", url: "https://variety.com/feed/" },
+      { name: "The Hollywood Reporter", url: "https://www.hollywoodreporter.com/feed/" },
+      { name: "Deadline", url: "https://deadline.com/feed/" },
+    ],
+  },
   // مثال لإضافة قسم جديد بشكل دائم في الكود:
   // {
   //   id: "tech",
@@ -608,18 +630,36 @@ async function loadSectionHeadlines(section, wrapper) {
   }
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat("ar", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  numberingSystem: "latn",
+});
+
+function formatPubDate(pubDate) {
+  if (!pubDate || isNaN(pubDate.getTime())) return "";
+  return dateTimeFormatter.format(pubDate);
+}
+
 function renderHeadlines(listEl, items) {
   listEl.innerHTML = items
-    .map(
-      (item) => `
+    .map((item) => {
+      const dateLabel = formatPubDate(item.pubDate);
+      return `
         <li>
           <a href="${escapeAttr(item.link)}" target="_blank" rel="noopener noreferrer">
             ${escapeHtml(item.title)}
           </a>
-          <span class="source-tag">${escapeHtml(item.sourceName)}</span>
+          <div class="meta-row">
+            <span class="source-tag">${escapeHtml(item.sourceName)}</span>
+            ${dateLabel ? `<span class="date-tag">${escapeHtml(dateLabel)}</span>` : ""}
+          </div>
         </li>
-      `
-    )
+      `;
+    })
     .join("");
 }
 
