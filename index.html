@@ -15,6 +15,7 @@
     --text-dim: #9aa0ac;
     --accent: #5b8cff;
     --error: #ff6b6b;
+    --success: #4caf7d;
     --radius: 12px;
   }
 
@@ -38,6 +39,7 @@
   header {
     text-align: center;
     margin-bottom: 28px;
+    position: relative;
   }
 
   header h1 {
@@ -49,6 +51,23 @@
     color: var(--text-dim);
     font-size: 0.9rem;
     margin: 0;
+  }
+
+  .settings-toggle {
+    margin-top: 14px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  .settings-toggle:hover {
+    color: var(--text);
+    border-color: var(--accent);
   }
 
   .section {
@@ -153,6 +172,10 @@
     color: var(--error);
   }
 
+  .state-msg.success {
+    color: var(--success);
+  }
+
   .spinner {
     display: inline-block;
     width: 14px;
@@ -176,6 +199,118 @@
     margin-top: 24px;
   }
 
+  /* لوحة الإعدادات: إضافة مواضيع ومصادر جديدة */
+  #settings-panel {
+    display: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+
+  #settings-panel.open {
+    display: block;
+  }
+
+  #settings-panel h2 {
+    font-size: 1rem;
+    margin: 0 0 4px;
+  }
+
+  #settings-panel .hint {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    margin: 0 0 14px;
+  }
+
+  .settings-block {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .settings-block:first-of-type {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .field-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .field-row input,
+  .field-row select {
+    flex: 1 1 160px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
+
+  .field-row button {
+    flex: 0 0 auto;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  .field-row button:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .field-note {
+    color: var(--text-dim);
+    font-size: 0.76rem;
+    margin: 0 0 10px;
+  }
+
+  ul.manage-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    font-size: 0.85rem;
+  }
+
+  ul.manage-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  ul.manage-list li:last-child {
+    border-bottom: none;
+  }
+
+  ul.manage-list .remove-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--error);
+    border-radius: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    flex-shrink: 0;
+  }
+
+  ul.manage-list .topic-name {
+    font-weight: bold;
+  }
+
   /* الوضع الفاتح، يُفعّل تلقائيًا إذا كان نظام المستخدم يفضّل الوضع الفاتح */
   @media (prefers-color-scheme: light) {
     :root {
@@ -194,34 +329,69 @@
 <main>
   <header>
     <h1>📰 الملخص اليومي</h1>
-    <p>أحدث العناوين فقط، من مصادر رسمية وموثوقة</p>
+    <p>أحدث العناوين فقط، من مصادر إخبارية موثوقة</p>
+    <button class="settings-toggle" id="settings-toggle-btn" type="button">⚙️ إدارة المواضيع والمصادر</button>
   </header>
+
+  <div id="settings-panel">
+    <h2>➕ إضافة موضوع جديد</h2>
+    <p class="hint">أنشئ موضوعًا جديدًا (مثل "أخبار رياضية أخرى")، ثم أضف له مصادر RSS من القسم الثاني بالأسفل.</p>
+    <div class="settings-block">
+      <div class="field-row">
+        <input type="text" id="new-topic-title" placeholder="اسم الموضوع، مثال: أخبار كرة القدم السعودية" />
+        <button type="button" id="add-topic-btn">إضافة الموضوع</button>
+      </div>
+    </div>
+
+    <div class="settings-block">
+      <h2>📡 إضافة مصدر RSS إلى موضوع</h2>
+      <p class="hint">الصق رابط خلاصة RSS مباشرة (وليس رابط الصفحة الرئيسية للموقع).</p>
+      <div class="field-row">
+        <select id="feed-target-topic"></select>
+      </div>
+      <div class="field-row">
+        <input type="text" id="new-feed-name" placeholder="اسم المصدر، مثال: Sky Sports" />
+        <input type="text" id="new-feed-url" placeholder="رابط RSS، مثال: https://example.com/feed" />
+        <button type="button" id="add-feed-btn">إضافة المصدر</button>
+      </div>
+      <p class="field-note" id="add-feed-status"></p>
+    </div>
+
+    <div class="settings-block">
+      <h2>🗂️ المواضيع والمصادر الحالية</h2>
+      <div id="manage-list-container"></div>
+      <p class="field-note">
+        ملاحظة: هذه الإعدادات تُحفظ داخل متصفحك الحالي فقط (localStorage)، لأن الصفحة ثابتة
+        بلا خادم خلفي. لن تظهر إضافاتك إذا فتحت الصفحة من جهاز أو متصفح آخر.
+      </p>
+    </div>
+  </div>
 
   <div id="sections"></div>
 
   <footer>
-    يتم جلب البيانات مباشرة من مصادر RSS الرسمية عبر خدمة تحويل RSS إلى JSON.
+    تُجلب الأخبار من خلاصات RSS لمصادر موثوقة عبر خدمة تحويل RSS إلى JSON.
   </footer>
 </main>
 
 <script>
 /*
  * ============================================================
- *  إعداد الأقسام (Config)
+ *  الأقسام المدمجة افتراضيًا (Config)
  * ============================================================
- * لإضافة قسم جديد مستقبلاً (مثلاً "أخبار رياضية أخرى" أو "أخبار تقنية"):
- * فقط أضف كائن جديد إلى مصفوفة SECTIONS بنفس الشكل أدناه.
+ * لإضافة قسم جديد بشكل دائم في الكود (بدل استخدام لوحة الإعدادات):
+ * فقط أضف كائنًا جديدًا إلى مصفوفة BUILTIN_SECTIONS بنفس الشكل أدناه.
  * لا حاجة لتعديل أي كود آخر في الصفحة.
  *
- * كل عنصر في SECTIONS:
+ * كل عنصر في BUILTIN_SECTIONS:
  *   id:    معرف فريد (يُستخدم داخليًا فقط)
  *   title: العنوان الظاهر للمستخدم
  *   icon:  إيموجي بسيط يظهر بجانب العنوان
  *   feeds: مصفوفة من مصادر RSS { name, url }
  *          name = اسم المصدر كما سيظهر للمستخدم
- *          url  = رابط RSS الرسمي (وليس رابط الموقع العادي)
+ *          url  = رابط RSS المباشر (وليس رابط الموقع العادي)
  */
-const SECTIONS = [
+const BUILTIN_SECTIONS = [
   {
     id: "arsenal",
     title: "أخبار نادي Arsenal",
@@ -229,6 +399,7 @@ const SECTIONS = [
     feeds: [
       { name: "BBC Sport", url: "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml" },
       { name: "The Guardian", url: "https://www.theguardian.com/football/arsenal/rss" },
+      { name: "Daily Cannon", url: "https://www.dailycannon.com/feed/" },
     ],
   },
   {
@@ -240,7 +411,7 @@ const SECTIONS = [
       { name: "MIT Technology Review", url: "https://www.technologyreview.com/feed/" },
     ],
   },
-  // مثال لإضافة قسم جديد لاحقًا:
+  // مثال لإضافة قسم جديد بشكل دائم في الكود:
   // {
   //   id: "tech",
   //   title: "أخبار تقنية عامة",
@@ -297,32 +468,75 @@ const MAX_HEADLINES_PER_SECTION = 12;
 
 /*
  * ============================================================
+ *  إعدادات المستخدم (مواضيع ومصادر مضافة يدويًا)
+ * ============================================================
+ * تُحفظ في localStorage الخاص بالمتصفح فقط. الشكل:
+ *   customTopics: [{ id, title, icon, feeds: [{name, url}] }]
+ *   extraFeeds:   { [sectionId]: [{name, url}] }  (مصادر أُضيفت لقسم مدمج)
+ */
+const STORAGE_KEY = "dailySummary.settings.v1";
+
+function loadUserSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { customTopics: [], extraFeeds: {} };
+    const parsed = JSON.parse(raw);
+    return {
+      customTopics: Array.isArray(parsed.customTopics) ? parsed.customTopics : [],
+      extraFeeds: parsed.extraFeeds && typeof parsed.extraFeeds === "object" ? parsed.extraFeeds : {},
+    };
+  } catch (err) {
+    console.error("تعذّرت قراءة الإعدادات المحفوظة", err);
+    return { customTopics: [], extraFeeds: {} };
+  }
+}
+
+function saveUserSettings() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(userSettings));
+}
+
+let userSettings = loadUserSettings();
+
+function getEffectiveSections() {
+  const builtinWithExtras = BUILTIN_SECTIONS.map((section) => ({
+    ...section,
+    feeds: [...section.feeds, ...(userSettings.extraFeeds[section.id] || [])],
+  }));
+  return [...builtinWithExtras, ...userSettings.customTopics];
+}
+
+/*
+ * ============================================================
  *  بناء واجهة الأقسام
  * ============================================================
  */
 const sectionsContainer = document.getElementById("sections");
 
-SECTIONS.forEach((section) => {
-  const wrapper = document.createElement("div");
-  wrapper.className = "section";
-  wrapper.id = `section-${section.id}`;
+function renderAllSections() {
+  sectionsContainer.innerHTML = "";
 
-  wrapper.innerHTML = `
-    <button class="section-toggle" data-id="${section.id}">
-      <span class="label">${section.icon} ${section.title}</span>
-      <span class="chevron">▾</span>
-    </button>
-    <div class="section-body">
-      <div class="state-msg" data-role="state"></div>
-      <ul class="headlines" data-role="list"></ul>
-    </div>
-  `;
+  getEffectiveSections().forEach((section) => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "section";
+    wrapper.id = `section-${section.id}`;
 
-  sectionsContainer.appendChild(wrapper);
+    wrapper.innerHTML = `
+      <button class="section-toggle" data-id="${section.id}">
+        <span class="label">${section.icon || "📌"} ${escapeHtml(section.title)}</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="section-body">
+        <div class="state-msg" data-role="state"></div>
+        <ul class="headlines" data-role="list"></ul>
+      </div>
+    `;
 
-  const toggleBtn = wrapper.querySelector(".section-toggle");
-  toggleBtn.addEventListener("click", () => onSectionToggle(section, wrapper));
-});
+    sectionsContainer.appendChild(wrapper);
+
+    const toggleBtn = wrapper.querySelector(".section-toggle");
+    toggleBtn.addEventListener("click", () => onSectionToggle(section, wrapper));
+  });
+}
 
 function onSectionToggle(section, wrapper) {
   const isOpen = wrapper.classList.toggle("open");
@@ -339,8 +553,14 @@ async function loadSectionHeadlines(section, wrapper) {
   const listEl = wrapper.querySelector('[data-role="list"]');
 
   stateEl.className = "state-msg";
-  stateEl.innerHTML = `جاري التحميل<span class="spinner"></span>`;
+  stateEl.innerHTML = `جارٍ التحميل<span class="spinner"></span>`;
   listEl.innerHTML = "";
+
+  if (!section.feeds || section.feeds.length === 0) {
+    stateEl.className = "state-msg";
+    stateEl.textContent = "لا توجد مصادر مضافة لهذا الموضوع بعد. أضف مصدرًا من ⚙️ إدارة المواضيع والمصادر.";
+    return;
+  }
 
   try {
     const results = await Promise.allSettled(
@@ -376,14 +596,14 @@ async function loadSectionHeadlines(section, wrapper) {
     stateEl.className = "state-msg";
     stateEl.textContent =
       failedCount > 0
-        ? `تعذّر تحميل ${failedCount} من أصل ${section.feeds.length} مصادر لهذا القسم.`
+        ? `تعذّر تحميل ${failedCount} من أصل ${section.feeds.length} مصدرًا في هذا القسم.`
         : "";
 
     wrapper.dataset.loaded = "true";
   } catch (err) {
     console.error(err);
     stateEl.className = "state-msg error";
-    stateEl.textContent = "⚠️ حدث خطأ أثناء جلب الأخبار. تحقق من اتصالك بالإنترنت وحاول مجددًا.";
+    stateEl.textContent = "⚠️ تعذّر جلب الأخبار. يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.";
     listEl.innerHTML = "";
   }
 }
@@ -412,6 +632,175 @@ function escapeHtml(str) {
 function escapeAttr(str) {
   return (str ?? "").replace(/"/g, "&quot;");
 }
+
+/*
+ * ============================================================
+ *  لوحة الإعدادات: إضافة/حذف مواضيع ومصادر
+ * ============================================================
+ */
+const settingsPanel = document.getElementById("settings-panel");
+const settingsToggleBtn = document.getElementById("settings-toggle-btn");
+const newTopicTitleInput = document.getElementById("new-topic-title");
+const addTopicBtn = document.getElementById("add-topic-btn");
+const feedTargetTopicSelect = document.getElementById("feed-target-topic");
+const newFeedNameInput = document.getElementById("new-feed-name");
+const newFeedUrlInput = document.getElementById("new-feed-url");
+const addFeedBtn = document.getElementById("add-feed-btn");
+const addFeedStatus = document.getElementById("add-feed-status");
+const manageListContainer = document.getElementById("manage-list-container");
+
+settingsToggleBtn.addEventListener("click", () => {
+  settingsPanel.classList.toggle("open");
+});
+
+function isBuiltinSection(id) {
+  return BUILTIN_SECTIONS.some((s) => s.id === id);
+}
+
+function renderSettingsPanel() {
+  const sections = getEffectiveSections();
+
+  // قائمة اختيار الموضوع الهدف عند إضافة مصدر
+  feedTargetTopicSelect.innerHTML = sections
+    .map((s) => `<option value="${escapeAttr(s.id)}">${escapeHtml(s.icon || "📌")} ${escapeHtml(s.title)}</option>`)
+    .join("");
+
+  // قائمة الإدارة: المواضيع ومصادرها، مع أزرار حذف للعناصر المضافة يدويًا فقط
+  manageListContainer.innerHTML = sections
+    .map((section) => {
+      const feedItems = (section.feeds || [])
+        .map((feed, feedIndex) => {
+          const extras = isBuiltinSection(section.id)
+            ? userSettings.extraFeeds[section.id] || []
+            : section.feeds;
+          const builtinCount = isBuiltinSection(section.id)
+            ? BUILTIN_SECTIONS.find((s) => s.id === section.id).feeds.length
+            : 0;
+          const isRemovable = isBuiltinSection(section.id) ? feedIndex >= builtinCount : true;
+          const removeBtn = isRemovable
+            ? `<button type="button" class="remove-btn" data-remove-feed data-section-id="${escapeAttr(section.id)}" data-feed-index="${isBuiltinSection(section.id) ? feedIndex - builtinCount : feedIndex}">حذف</button>`
+            : "";
+          return `<li><span>${escapeHtml(feed.name)}</span>${removeBtn}</li>`;
+        })
+        .join("");
+
+      const topicRemoveBtn = !isBuiltinSection(section.id)
+        ? `<button type="button" class="remove-btn" data-remove-topic data-section-id="${escapeAttr(section.id)}">حذف الموضوع بالكامل</button>`
+        : "";
+
+      return `
+        <div class="settings-block">
+          <div class="field-row" style="justify-content: space-between; align-items: center;">
+            <span class="topic-name">${escapeHtml(section.icon || "📌")} ${escapeHtml(section.title)}</span>
+            ${topicRemoveBtn}
+          </div>
+          <ul class="manage-list">${feedItems || "<li>لا توجد مصادر بعد</li>"}</ul>
+        </div>
+      `;
+    })
+    .join("");
+
+  manageListContainer.querySelectorAll("[data-remove-feed]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      removeFeed(btn.dataset.sectionId, Number(btn.dataset.feedIndex));
+    });
+  });
+
+  manageListContainer.querySelectorAll("[data-remove-topic]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      removeCustomTopic(btn.dataset.sectionId);
+    });
+  });
+}
+
+function addCustomTopic() {
+  const title = newTopicTitleInput.value.trim();
+  if (!title) return;
+
+  userSettings.customTopics.push({
+    id: `custom-${Date.now()}`,
+    title,
+    icon: "🗂️",
+    feeds: [],
+  });
+  saveUserSettings();
+  newTopicTitleInput.value = "";
+  renderAllSections();
+  renderSettingsPanel();
+}
+
+async function addFeedToTopic() {
+  const sectionId = feedTargetTopicSelect.value;
+  const name = newFeedNameInput.value.trim();
+  const url = newFeedUrlInput.value.trim();
+
+  if (!sectionId || !name || !url) {
+    addFeedStatus.className = "field-note error";
+    addFeedStatus.textContent = "الرجاء تعبئة اسم المصدر ورابط RSS واختيار الموضوع.";
+    return;
+  }
+
+  addFeedBtn.disabled = true;
+  addFeedStatus.className = "field-note";
+  addFeedStatus.textContent = "جارٍ التحقق من الرابط...";
+
+  try {
+    const res = await fetch(buildProxyUrl(url));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    parseFeedResponse(json, name); // يتحقق من صحة شكل الاستجابة، يرمي خطأ لو غير صالحة
+
+    if (isBuiltinSection(sectionId)) {
+      if (!userSettings.extraFeeds[sectionId]) userSettings.extraFeeds[sectionId] = [];
+      userSettings.extraFeeds[sectionId].push({ name, url });
+    } else {
+      const topic = userSettings.customTopics.find((t) => t.id === sectionId);
+      if (topic) topic.feeds.push({ name, url });
+    }
+    saveUserSettings();
+
+    newFeedNameInput.value = "";
+    newFeedUrlInput.value = "";
+    addFeedStatus.className = "field-note success";
+    addFeedStatus.textContent = "✅ تمت إضافة المصدر بنجاح.";
+
+    renderAllSections();
+    renderSettingsPanel();
+  } catch (err) {
+    console.error(err);
+    addFeedStatus.className = "field-note error";
+    addFeedStatus.textContent = "⚠️ تعذّر التحقق من هذا الرابط. تأكد أنه رابط خلاصة RSS صحيح ثم حاول مجددًا.";
+  } finally {
+    addFeedBtn.disabled = false;
+  }
+}
+
+function removeFeed(sectionId, feedIndex) {
+  if (isBuiltinSection(sectionId)) {
+    if (userSettings.extraFeeds[sectionId]) {
+      userSettings.extraFeeds[sectionId].splice(feedIndex, 1);
+    }
+  } else {
+    const topic = userSettings.customTopics.find((t) => t.id === sectionId);
+    if (topic) topic.feeds.splice(feedIndex, 1);
+  }
+  saveUserSettings();
+  renderAllSections();
+  renderSettingsPanel();
+}
+
+function removeCustomTopic(sectionId) {
+  userSettings.customTopics = userSettings.customTopics.filter((t) => t.id !== sectionId);
+  saveUserSettings();
+  renderAllSections();
+  renderSettingsPanel();
+}
+
+addTopicBtn.addEventListener("click", addCustomTopic);
+addFeedBtn.addEventListener("click", addFeedToTopic);
+
+renderAllSections();
+renderSettingsPanel();
 </script>
 </body>
 </html>
