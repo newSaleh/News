@@ -191,6 +191,29 @@
     color: var(--text-dim);
   }
 
+  .load-more-btn {
+    display: none;
+    width: 100%;
+    margin-top: 10px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  .load-more-btn.visible {
+    display: block;
+  }
+
+  .load-more-btn:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
   .state-msg {
     color: var(--text-dim);
     font-size: 0.9rem;
@@ -505,7 +528,7 @@ function parseFeedResponse(json, sourceName) {
   }));
 }
 
-const MAX_HEADLINES_PER_SECTION = 12;
+const HEADLINES_PAGE_SIZE = 12; // عدد العناوين المعروضة دفعة واحدة، ويُضاف نفس العدد عند الضغط على "عرض أخبار أقدم"
 
 /*
  * ============================================================
@@ -650,8 +673,12 @@ function saveUserSettings(skipSync) {
 
 let userSettings = loadUserSettings();
 
-// آخر عناوين تم جلبها لكل قسم، تُستخدم لإعادة العرض عند تبديل الترجمة دون إعادة جلب RSS
+// كل العناوين المجلوبة لكل قسم (وليس فقط المعروض منها)، تُستخدم لإعادة العرض
+// عند تبديل الترجمة أو الضغط على "عرض أخبار أقدم" دون إعادة جلب RSS
 const sectionItemsCache = {};
+
+// عدد العناوين المعروضة حاليًا لكل قسم (يزداد مع "عرض أخبار أقدم")
+const sectionVisibleCounts = {};
 
 function getEffectiveSections() {
   const builtinWithExtras = BUILTIN_SECTIONS.map((section) => ({
@@ -684,6 +711,7 @@ function renderAllSections() {
       <div class="section-body">
         <div class="state-msg" data-role="state"></div>
         <ul class="headlines" data-role="list"></ul>
+        <button type="button" class="load-more-btn" data-role="load-more">عرض أخبار أقدم</button>
       </div>
     `;
 
@@ -691,6 +719,11 @@ function renderAllSections() {
 
     const toggleBtn = wrapper.querySelector(".section-toggle");
     toggleBtn.addEventListener("click", () => onSectionToggle(section, wrapper));
+
+    wrapper.querySelector('[data-role="load-more"]').addEventListener("click", () => {
+      sectionVisibleCounts[section.id] = (sectionVisibleCounts[section.id] || HEADLINES_PAGE_SIZE) + HEADLINES_PAGE_SIZE;
+      renderSectionPage(section.id, wrapper);
+    });
   });
 }
 
@@ -746,9 +779,9 @@ async function loadSectionHeadlines(section, wrapper) {
 
     allItems.sort((a, b) => (b.pubDate || 0) - (a.pubDate || 0));
 
-    const topItems = allItems.slice(0, MAX_HEADLINES_PER_SECTION);
-    sectionItemsCache[section.id] = topItems;
-    renderHeadlines(listEl, topItems);
+    sectionItemsCache[section.id] = allItems;
+    sectionVisibleCounts[section.id] = HEADLINES_PAGE_SIZE;
+    renderSectionPage(section.id, wrapper);
 
     stateEl.className = "state-msg";
     stateEl.textContent =
@@ -777,6 +810,18 @@ const dateTimeFormatter = new Intl.DateTimeFormat("ar", {
 function formatPubDate(pubDate) {
   if (!pubDate || isNaN(pubDate.getTime())) return "";
   return dateTimeFormatter.format(pubDate);
+}
+
+// يعرض أول sectionVisibleCounts[sectionId] عنصر من العناوين المخزّنة لهذا
+// القسم، ويُظهر زر "عرض أخبار أقدم" إن كان هناك المزيد لم يُعرض بعد
+function renderSectionPage(sectionId, wrapper) {
+  const listEl = wrapper.querySelector('[data-role="list"]');
+  const loadMoreBtn = wrapper.querySelector('[data-role="load-more"]');
+  const items = sectionItemsCache[sectionId] || [];
+  const visibleCount = sectionVisibleCounts[sectionId] || HEADLINES_PAGE_SIZE;
+
+  renderHeadlines(listEl, items.slice(0, visibleCount));
+  loadMoreBtn.classList.toggle("visible", items.length > visibleCount);
 }
 
 function renderHeadlines(listEl, items) {
@@ -866,10 +911,8 @@ translateToggleBtn.addEventListener("click", () => {
   document.querySelectorAll(".section").forEach((wrapper) => {
     if (wrapper.dataset.loaded !== "true") return;
     const sectionId = wrapper.id.replace(/^section-/, "");
-    const items = sectionItemsCache[sectionId];
-    if (!items) return;
-    const listEl = wrapper.querySelector('[data-role="list"]');
-    renderHeadlines(listEl, items);
+    if (!sectionItemsCache[sectionId]) return;
+    renderSectionPage(sectionId, wrapper);
   });
 });
 
