@@ -414,6 +414,7 @@
   </header>
 
   <div id="settings-panel">
+    <p class="field-note" id="sync-status-note"></p>
     <h2>➕ إضافة موضوع جديد</h2>
     <p class="hint">أنشئ موضوعًا جديدًا (مثل "أخبار رياضية أخرى")، ثم أضف له مصادر RSS من القسم الثاني بالأسفل.</p>
     <div class="settings-block">
@@ -900,9 +901,66 @@ function removeTvShow(showId, section, wrapper) {
 
 /*
  * ============================================================
+ *  مزامنة الإعدادات بين الأجهزة (Cloudflare Worker + GitHub Gist)
+ * ============================================================
+ * الصفحة ثابتة ولا يمكنها حفظ توكن GitHub بأمان، لذلك تتحدث فقط مع
+ * Worker صغير على Cloudflare (كوده وتعليمات نشره في worker/sync-worker.js
+ * بهذا المستودع) وهو من يحمل التوكن الحقيقي ويقرأ/يكتب في Gist خاص بك.
+ *
+ * لتفعيل المزامنة:
+ *   1. انشر الـ Worker باتباع الخطوات في worker/sync-worker.js.
+ *   2. ضع رابط الـ Worker في SYNC_WORKER_URL أدناه.
+ *   3. ضع نفس كلمة السر التي ضبطتها في الـ Worker (SYNC_SECRET) هنا.
+ *
+ * بدون هذين المتغيّرين، تبقى الإعدادات محفوظة في متصفحك فقط (كما كانت)
+ * ولا يظهر أي خطأ — المزامنة اختيارية بالكامل.
+ */
+const SYNC_WORKER_URL = ""; // رابط الـ Worker بعد نشره، مثال: https://daily-summary-sync.xxx.workers.dev
+const SYNC_SECRET = ""; // نفس SYNC_SECRET الذي ضبطته في الـ Worker
+
+async function fetchRemoteSettings() {
+  const res = await fetch(SYNC_WORKER_URL);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function pushSettingsToSync() {
+  if (!SYNC_WORKER_URL) return;
+  try {
+    const res = await fetch(SYNC_WORKER_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Sync-Secret": SYNC_SECRET },
+      body: JSON.stringify(userSettings),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    updateSyncStatus("✅ تمت المزامنة.", false);
+  } catch (err) {
+    console.error("تعذّرت مزامنة الإعدادات:", err);
+    updateSyncStatus("⚠️ تعذّرت مزامنة آخر تغيير. سيُعاد المحاولة مع التغيير القادم.", true);
+  }
+}
+
+let syncSaveTimer = null;
+function scheduleSyncSave() {
+  if (!SYNC_WORKER_URL) return;
+  updateSyncStatus("🔄 جارٍ حفظ التغييرات...", false);
+  clearTimeout(syncSaveTimer);
+  syncSaveTimer = setTimeout(pushSettingsToSync, 800);
+}
+
+function updateSyncStatus(text, isError) {
+  const el = document.getElementById("sync-status-note");
+  if (!el) return;
+  el.textContent = text;
+  el.className = isError ? "field-note error" : "field-note";
+}
+
+/*
+ * ============================================================
  *  إعدادات المستخدم (مواضيع ومصادر مضافة يدويًا + تفضيلات أخرى)
  * ============================================================
- * تُحفظ في localStorage الخاص بالمتصفح فقط. الشكل:
+ * تُحفظ محليًا في localStorage دائمًا (تعمل الصفحة بدونها فورًا)، وتُزامن
+ * أيضًا عبر SYNC_WORKER_URL إن كان مُفعّلًا. الشكل:
  *   customTopics:     [{ id, title, icon, feeds: [{name, url}] }]
  *   extraFeeds:       { [sectionId]: [{name, url}] }  (مصادر أُضيفت لقسم مدمج)
  *   translateEnabled: true/false
@@ -910,25 +968,28 @@ function removeTvShow(showId, section, wrapper) {
  */
 const STORAGE_KEY = "dailySummary.settings.v1";
 
+function normalizeSettings(raw) {
+  return {
+    customTopics: Array.isArray(raw && raw.customTopics) ? raw.customTopics : [],
+    extraFeeds: raw && raw.extraFeeds && typeof raw.extraFeeds === "object" ? raw.extraFeeds : {},
+    translateEnabled: Boolean(raw && raw.translateEnabled),
+    tvShows: Array.isArray(raw && raw.tvShows) ? raw.tvShows : [],
+  };
+}
+
 function loadUserSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { customTopics: [], extraFeeds: {}, translateEnabled: false, tvShows: [] };
-    const parsed = JSON.parse(raw);
-    return {
-      customTopics: Array.isArray(parsed.customTopics) ? parsed.customTopics : [],
-      extraFeeds: parsed.extraFeeds && typeof parsed.extraFeeds === "object" ? parsed.extraFeeds : {},
-      translateEnabled: Boolean(parsed.translateEnabled),
-      tvShows: Array.isArray(parsed.tvShows) ? parsed.tvShows : [],
-    };
+    return normalizeSettings(raw ? JSON.parse(raw) : null);
   } catch (err) {
     console.error("تعذّرت قراءة الإعدادات المحفوظة", err);
-    return { customTopics: [], extraFeeds: {}, translateEnabled: false, tvShows: [] };
+    return normalizeSettings(null);
   }
 }
 
-function saveUserSettings() {
+function saveUserSettings(skipSync) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(userSettings));
+  if (!skipSync) scheduleSyncSave();
 }
 
 let userSettings = loadUserSettings();
@@ -1332,6 +1393,24 @@ addFeedBtn.addEventListener("click", addFeedToTopic);
 
 renderAllSections();
 renderSettingsPanel();
+syncFromRemoteOnLoad();
+
+async function syncFromRemoteOnLoad() {
+  if (!SYNC_WORKER_URL) return;
+  updateSyncStatus("🔄 جارٍ جلب الإعدادات من الأجهزة الأخرى...", false);
+  try {
+    const remote = await fetchRemoteSettings();
+    userSettings = normalizeSettings(remote);
+    saveUserSettings(true);
+    renderAllSections();
+    renderSettingsPanel();
+    updateTranslateToggleLabel();
+    updateSyncStatus("✅ تمت المزامنة.", false);
+  } catch (err) {
+    console.error("تعذّر جلب الإعدادات من المزامنة، سيُستخدم التخزين المحلي:", err);
+    updateSyncStatus("⚠️ تعذّر الاتصال بالمزامنة، يُستخدم التخزين المحلي لهذا الجهاز مؤقتًا.", true);
+  }
+}
 </script>
 </body>
 </html>
