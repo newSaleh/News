@@ -340,54 +340,6 @@
     font-weight: bold;
   }
 
-  .show-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin-bottom: 10px;
-  }
-
-  .show-card:last-child {
-    margin-bottom: 0;
-  }
-
-  .show-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-
-  .show-title a {
-    color: var(--text);
-    text-decoration: none;
-    font-weight: bold;
-    font-size: 0.98rem;
-  }
-
-  .show-title a:hover {
-    color: var(--accent);
-    text-decoration: underline;
-  }
-
-  .show-row {
-    font-size: 0.86rem;
-    color: var(--text-dim);
-    margin-top: 4px;
-    line-height: 1.6;
-  }
-
-  .show-row-label {
-    color: var(--text);
-    font-weight: bold;
-  }
-
-  .show-row-date {
-    color: var(--text-dim);
-  }
-
   /* الوضع الفاتح، يُفعّل تلقائيًا إذا كان نظام المستخدم يفضّل الوضع الفاتح */
   @media (prefers-color-scheme: light) {
     :root {
@@ -451,8 +403,7 @@
   <div id="sections"></div>
 
   <footer>
-    تُجلب الأخبار من خلاصات RSS لمصادر موثوقة، ومقاطع يوتيوب عبر YouTube Data API،
-    ومواعيد الحلقات عبر TVMaze API.
+    تُجلب الأخبار من خلاصات RSS لمصادر موثوقة عبر خدمة تحويل RSS إلى JSON.
   </footer>
 </main>
 
@@ -469,65 +420,30 @@
  *   id:    معرف فريد (يُستخدم داخليًا فقط)
  *   title: العنوان الظاهر للمستخدم
  *   icon:  إيموجي بسيط يظهر بجانب العنوان
- *   type:  "rss" (افتراضي) لقسم مبني على خلاصات RSS، أو "youtube" لقسم
- *          أهم مقاطع يوتيوب، أو "tv-tracker" لقسم متابعة مواعيد الحلقات.
- *          كل نوع خاص (youtube / tv-tracker) له منطق عرض وجلب مخصص في
- *          الكود أدناه، ولا يدعم إضافة مصادر RSS من لوحة الإعدادات.
- *   feeds: (لقسم من نوع rss فقط) مصفوفة من مصادر RSS { name, url }
+ *   feeds: مصفوفة من مصادر RSS { name, url }
  *          name = اسم المصدر كما سيظهر للمستخدم
  *          url  = رابط RSS المباشر (وليس رابط الموقع العادي)
+ *
+ * ملاحظة: لا يوجد رابط RSS رسمي فعّال لموقع Arsenal.com نفسه (القديم
+ * توقف منذ 2017، ولم أجد بديلًا رسميًا حاليًا)، لذلك تُستخدم أهم مصادر
+ * صحفية موثوقة تغطي أخبار النادي بدلًا منه.
  */
 const BUILTIN_SECTIONS = [
   {
     id: "arsenal",
     title: "أخبار نادي Arsenal",
     icon: "⚽",
-    type: "rss",
     feeds: [
       { name: "BBC Sport", url: "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml" },
       { name: "The Guardian", url: "https://www.theguardian.com/football/arsenal/rss" },
       { name: "Daily Cannon", url: "https://www.dailycannon.com/feed/" },
     ],
   },
-  {
-    id: "ai",
-    title: "أخبار الذكاء الاصطناعي (AI)",
-    icon: "🤖",
-    type: "rss",
-    feeds: [
-      { name: "TechCrunch", url: "https://techcrunch.com/category/artificial-intelligence/feed/" },
-      { name: "MIT Technology Review", url: "https://www.technologyreview.com/feed/" },
-    ],
-  },
-  {
-    id: "movies-tv",
-    title: "أخبار الأفلام والمسلسلات الأمريكية",
-    icon: "🎬",
-    type: "rss",
-    feeds: [
-      { name: "Variety", url: "https://variety.com/feed/" },
-      { name: "The Hollywood Reporter", url: "https://www.hollywoodreporter.com/feed/" },
-      { name: "Deadline", url: "https://deadline.com/feed/" },
-    ],
-  },
-  {
-    id: "youtube-top",
-    title: "أهم 10 مقاطع يوتيوب اليوم",
-    icon: "▶️",
-    type: "youtube",
-  },
-  {
-    id: "tv-tracker",
-    title: "مواعيد حلقات المسلسلات",
-    icon: "📺",
-    type: "tv-tracker",
-  },
   // مثال لإضافة قسم جديد بشكل دائم في الكود:
   // {
   //   id: "tech",
   //   title: "أخبار تقنية عامة",
   //   icon: "💻",
-  //   type: "rss",
   //   feeds: [
   //     { name: "The Verge", url: "https://www.theverge.com/rss/index.xml" },
   //   ],
@@ -630,277 +546,6 @@ async function translateTitle(text) {
 
 /*
  * ============================================================
- *  أهم مقاطع يوتيوب اليوم (YouTube Data API v3)
- * ============================================================
- * لا توجد خلاصة RSS رسمية لقائمة "الرائج" على يوتيوب، لذلك نستخدم
- * واجهة YouTube Data API v3 الرسمية مباشرة (videos.list مع
- * chart=mostPopular)، وهي أقرب مكافئ رسمي لهذه الفكرة.
- *
- * يتطلب هذا القسم مفتاح API مجاني خاص بك (الحصة المجانية اليومية
- * سخية جدًا وتكفي استخدامًا شخصيًا يوميًا):
- *   1. أنشئ مشروعًا على https://console.cloud.google.com
- *   2. فعّل "YouTube Data API v3" من مكتبة الـ APIs.
- *   3. أنشئ API key من صفحة Credentials، ويُفضّل تقييده (Restrict key)
- *      بحيث يعمل فقط من نطاق صفحتك على GitHub Pages (HTTP referrers)
- *      لحمايته من الاستخدام من مواقع أخرى.
- *   4. ضع المفتاح في YOUTUBE_API_KEY أدناه.
- * بدون مفتاح، سيعرض هذا القسم رسالة توضح أنه يحتاج إعدادًا أولًا،
- * ولن يكسر بقية الصفحة.
- */
-const YOUTUBE_API_KEY = ""; // ضع مفتاح YouTube Data API v3 هنا
-const YOUTUBE_REGION_CODE = "US"; // كود الدولة للرائج (مثال: SA، EG، US)، غيّره حسب رغبتك
-
-function buildYoutubeTrendingUrl() {
-  const params = new URLSearchParams({
-    part: "snippet,statistics",
-    chart: "mostPopular",
-    regionCode: YOUTUBE_REGION_CODE,
-    maxResults: "10",
-    key: YOUTUBE_API_KEY,
-  });
-  return `https://www.googleapis.com/youtube/v3/videos?${params.toString()}`;
-}
-
-const viewCountFormatter = new Intl.NumberFormat("ar", { notation: "compact", numberingSystem: "latn" });
-
-function formatViewCount(viewCount) {
-  const n = Number(viewCount);
-  if (!viewCount || isNaN(n)) return "";
-  return `${viewCountFormatter.format(n)} مشاهدة`;
-}
-
-async function loadYoutubeTrending(section, wrapper) {
-  const stateEl = wrapper.querySelector('[data-role="state"]');
-  const listEl = wrapper.querySelector('[data-role="list"]');
-
-  if (!YOUTUBE_API_KEY) {
-    stateEl.className = "state-msg";
-    stateEl.textContent =
-      "هذا القسم يحتاج مفتاح YouTube Data API v3 مجاني ليعمل. ابحث عن YOUTUBE_API_KEY في تعليقات الكود لمعرفة طريقة الحصول عليه وإضافته.";
-    listEl.innerHTML = "";
-    return;
-  }
-
-  stateEl.className = "state-msg";
-  stateEl.innerHTML = `جارٍ التحميل<span class="spinner"></span>`;
-  listEl.innerHTML = "";
-
-  try {
-    const res = await fetch(buildYoutubeTrendingUrl());
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    if (!Array.isArray(json.items)) throw new Error("استجابة غير صالحة من YouTube API");
-
-    const items = json.items.map((v) => ({
-      title: (v.snippet && v.snippet.title) || "(بدون عنوان)",
-      link: `https://www.youtube.com/watch?v=${v.id}`,
-      pubDate: v.snippet && v.snippet.publishedAt ? new Date(v.snippet.publishedAt) : null,
-      sourceName: (v.snippet && v.snippet.channelTitle) || "YouTube",
-      extraLabel: formatViewCount(v.statistics && v.statistics.viewCount),
-    }));
-
-    sectionItemsCache[section.id] = items;
-    renderHeadlines(listEl, items);
-
-    stateEl.className = "state-msg";
-    stateEl.textContent = "";
-    wrapper.dataset.loaded = "true";
-  } catch (err) {
-    console.error(err);
-    stateEl.className = "state-msg error";
-    stateEl.textContent = "⚠️ تعذّر جلب مقاطع يوتيوب. تحقق من صحة مفتاح API واتصال الإنترنت.";
-    listEl.innerHTML = "";
-  }
-}
-
-/*
- * ============================================================
- *  متابعة مواعيد حلقات المسلسلات (TVMaze API)
- * ============================================================
- * نستخدم TVMaze (https://api.tvmaze.com) لأنها مجانية بالكامل، بلا
- * مفتاح API، ومفتوحة الوصول من المتصفح مباشرة (CORS). لا يمكن قراءة
- * قوائم IMDb تلقائيًا (موقع IMDb يمنع أي طلب آلي)، لذلك تُضاف المسلسلات
- * يدويًا هنا بالاسم مرة واحدة، وتبقى محفوظة في متصفحك حتى تُضيف أو
- * تحذف مسلسلات لاحقًا.
- */
-async function searchTvShow(query) {
-  const res = await fetch(`https://api.tvmaze.com/singlesearch/shows?q=${encodeURIComponent(query)}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const show = await res.json();
-  if (!show || !show.id) throw new Error("لم يتم العثور على مسلسل بهذا الاسم");
-  return show;
-}
-
-async function fetchShowEpisodeInfo(tvmazeId) {
-  const url = `https://api.tvmaze.com/shows/${tvmazeId}?embed[]=previousepisode&embed[]=nextepisode`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-const episodeDateFormatter = new Intl.DateTimeFormat("ar", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  numberingSystem: "latn",
-});
-
-const episodeDateTimeFormatter = new Intl.DateTimeFormat("ar", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  numberingSystem: "latn",
-});
-
-function formatEpisodeWhen(episode) {
-  if (episode.airstamp) {
-    const d = new Date(episode.airstamp);
-    if (!isNaN(d.getTime())) {
-      return episode.airtime ? episodeDateTimeFormatter.format(d) : episodeDateFormatter.format(d);
-    }
-  }
-  if (episode.airdate) {
-    const d = new Date(`${episode.airdate}T00:00:00`);
-    if (!isNaN(d.getTime())) return episodeDateFormatter.format(d);
-  }
-  return null;
-}
-
-function formatEpisodeLine(episode) {
-  const parts = [];
-  if (episode.season != null && episode.number != null) {
-    parts.push(`الموسم ${episode.season} • الحلقة ${episode.number}`);
-  }
-  if (episode.name) parts.push(escapeHtml(episode.name));
-  const whenLabel = formatEpisodeWhen(episode);
-  const titleLine = escapeHtml(parts.join(" — "));
-  return whenLabel ? `${titleLine}<br /><span class="show-row-date">${escapeHtml(whenLabel)}</span>` : titleLine;
-}
-
-function renderShowCard(show) {
-  const next = show._embedded && show._embedded.nextepisode;
-  const prev = show._embedded && show._embedded.previousepisode;
-
-  const nextLabel = next
-    ? formatEpisodeLine(next)
-    : show.status === "Ended"
-    ? "انتهى العرض، لا توجد حلقات جديدة."
-    : "لم يُحدَّد موعد الحلقة القادمة بعد.";
-
-  const prevLabel = prev ? formatEpisodeLine(prev) : "لا توجد حلقات سابقة بعد.";
-
-  return `
-    <div class="show-card">
-      <div class="show-card-header">
-        <span class="show-title"><a href="${escapeAttr(show.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(show.name)}</a></span>
-        <button type="button" class="remove-btn" data-remove-show data-show-id="${show.id}">حذف</button>
-      </div>
-      <div class="show-row"><span class="show-row-label">📅 الحلقة القادمة:</span> ${nextLabel}</div>
-      <div class="show-row"><span class="show-row-label">⏮️ آخر حلقة عُرضت:</span> ${prevLabel}</div>
-    </div>
-  `;
-}
-
-function getShowSortKey(show) {
-  const next = show._embedded && show._embedded.nextepisode;
-  if (next && next.airstamp) {
-    const t = new Date(next.airstamp).getTime();
-    if (!isNaN(t)) return t;
-  }
-  return Infinity;
-}
-
-async function loadTvTrackerSection(section, wrapper) {
-  const stateEl = wrapper.querySelector('[data-role="state"]');
-  const listEl = wrapper.querySelector('[data-role="list"]');
-
-  if (userSettings.tvShows.length === 0) {
-    stateEl.className = "state-msg";
-    stateEl.textContent = "أضف مسلسلًا من الحقل أعلاه لمتابعة موعد حلقته القادمة.";
-    listEl.innerHTML = "";
-    wrapper.dataset.loaded = "true";
-    return;
-  }
-
-  stateEl.className = "state-msg";
-  stateEl.innerHTML = `جارٍ التحميل<span class="spinner"></span>`;
-  listEl.innerHTML = "";
-
-  try {
-    const results = await Promise.allSettled(userSettings.tvShows.map((show) => fetchShowEpisodeInfo(show.id)));
-
-    const shows = [];
-    let failedCount = 0;
-    results.forEach((r) => {
-      if (r.status === "fulfilled") shows.push(r.value);
-      else failedCount++;
-    });
-
-    shows.sort((a, b) => getShowSortKey(a) - getShowSortKey(b));
-
-    listEl.innerHTML = shows.map(renderShowCard).join("");
-
-    listEl.querySelectorAll("[data-remove-show]").forEach((btn) => {
-      btn.addEventListener("click", () => removeTvShow(Number(btn.dataset.showId), section, wrapper));
-    });
-
-    stateEl.className = failedCount > 0 ? "state-msg error" : "state-msg";
-    stateEl.textContent = failedCount > 0 ? `⚠️ تعذّر تحميل بيانات ${failedCount} من المسلسلات.` : "";
-    wrapper.dataset.loaded = "true";
-  } catch (err) {
-    console.error(err);
-    stateEl.className = "state-msg error";
-    stateEl.textContent = "⚠️ تعذّر تحميل بيانات المسلسلات. تحقق من اتصال الإنترنت.";
-    listEl.innerHTML = "";
-  }
-}
-
-async function addTvShow(section, wrapper) {
-  const input = wrapper.querySelector('[data-role="new-show-name"]');
-  const statusEl = wrapper.querySelector('[data-role="add-show-status"]');
-  const query = input.value.trim();
-  if (!query) return;
-
-  statusEl.className = "field-note";
-  statusEl.textContent = "جارٍ البحث...";
-
-  try {
-    const show = await searchTvShow(query);
-
-    if (userSettings.tvShows.some((s) => s.id === show.id)) {
-      statusEl.className = "field-note";
-      statusEl.textContent = `"${show.name}" مضاف بالفعل إلى المتابعة.`;
-      return;
-    }
-
-    userSettings.tvShows.push({ id: show.id, name: show.name });
-    saveUserSettings();
-    input.value = "";
-    statusEl.className = "field-note success";
-    statusEl.textContent = `✅ تمت إضافة "${show.name}".`;
-
-    wrapper.dataset.loaded = "false";
-    loadTvTrackerSection(section, wrapper);
-  } catch (err) {
-    console.error(err);
-    statusEl.className = "field-note error";
-    statusEl.textContent = "⚠️ لم يتم العثور على مسلسل بهذا الاسم. جرّب كتابته بالإنجليزية.";
-  }
-}
-
-function removeTvShow(showId, section, wrapper) {
-  userSettings.tvShows = userSettings.tvShows.filter((s) => s.id !== showId);
-  saveUserSettings();
-  wrapper.dataset.loaded = "false";
-  loadTvTrackerSection(section, wrapper);
-}
-
-/*
- * ============================================================
  *  مزامنة الإعدادات بين الأجهزة (Cloudflare Worker + GitHub Gist)
  * ============================================================
  * الصفحة ثابتة ولا يمكنها حفظ توكن GitHub بأمان، لذلك تتحدث فقط مع
@@ -964,7 +609,6 @@ function updateSyncStatus(text, isError) {
  *   customTopics:     [{ id, title, icon, feeds: [{name, url}] }]
  *   extraFeeds:       { [sectionId]: [{name, url}] }  (مصادر أُضيفت لقسم مدمج)
  *   translateEnabled: true/false
- *   tvShows:          [{ id, name }]  (معرّف TVMaze واسم المسلسل)
  */
 const STORAGE_KEY = "dailySummary.settings.v1";
 
@@ -973,7 +617,6 @@ function normalizeSettings(raw) {
     customTopics: Array.isArray(raw && raw.customTopics) ? raw.customTopics : [],
     extraFeeds: raw && raw.extraFeeds && typeof raw.extraFeeds === "object" ? raw.extraFeeds : {},
     translateEnabled: Boolean(raw && raw.translateEnabled),
-    tvShows: Array.isArray(raw && raw.tvShows) ? raw.tvShows : [],
   };
 }
 
@@ -998,10 +641,10 @@ let userSettings = loadUserSettings();
 const sectionItemsCache = {};
 
 function getEffectiveSections() {
-  const builtinWithExtras = BUILTIN_SECTIONS.map((section) => {
-    if (section.type !== "rss") return section;
-    return { ...section, feeds: [...section.feeds, ...(userSettings.extraFeeds[section.id] || [])] };
-  });
+  const builtinWithExtras = BUILTIN_SECTIONS.map((section) => ({
+    ...section,
+    feeds: [...section.feeds, ...(userSettings.extraFeeds[section.id] || [])],
+  }));
   return [...builtinWithExtras, ...userSettings.customTopics];
 }
 
@@ -1020,38 +663,21 @@ function renderAllSections() {
     wrapper.className = "section";
     wrapper.id = `section-${section.id}`;
 
-    const bodyHtml =
-      section.type === "tv-tracker"
-        ? `
-          <div class="field-row">
-            <input type="text" data-role="new-show-name" placeholder="اسم المسلسل بالإنجليزية، مثال: Stranger Things" />
-            <button type="button" data-role="add-show-btn">إضافة</button>
-          </div>
-          <p class="field-note" data-role="add-show-status"></p>
-          <div class="state-msg" data-role="state"></div>
-          <div data-role="list"></div>
-        `
-        : `
-          <div class="state-msg" data-role="state"></div>
-          <ul class="headlines" data-role="list"></ul>
-        `;
-
     wrapper.innerHTML = `
       <button class="section-toggle" data-id="${section.id}">
         <span class="label">${section.icon || "📌"} ${escapeHtml(section.title)}</span>
         <span class="chevron">▾</span>
       </button>
-      <div class="section-body">${bodyHtml}</div>
+      <div class="section-body">
+        <div class="state-msg" data-role="state"></div>
+        <ul class="headlines" data-role="list"></ul>
+      </div>
     `;
 
     sectionsContainer.appendChild(wrapper);
 
     const toggleBtn = wrapper.querySelector(".section-toggle");
     toggleBtn.addEventListener("click", () => onSectionToggle(section, wrapper));
-
-    if (section.type === "tv-tracker") {
-      wrapper.querySelector('[data-role="add-show-btn"]').addEventListener("click", () => addTvShow(section, wrapper));
-    }
   });
 }
 
@@ -1062,13 +688,7 @@ function onSectionToggle(section, wrapper) {
   // إذا كانت العناوين محمّلة مسبقًا، لا داعي لإعادة الجلب
   if (wrapper.dataset.loaded === "true") return;
 
-  if (section.type === "youtube") {
-    loadYoutubeTrending(section, wrapper);
-  } else if (section.type === "tv-tracker") {
-    loadTvTrackerSection(section, wrapper);
-  } else {
-    loadSectionHeadlines(section, wrapper);
-  }
+  loadSectionHeadlines(section, wrapper);
 }
 
 async function loadSectionHeadlines(section, wrapper) {
@@ -1158,7 +778,6 @@ function renderHeadlines(listEl, items) {
           <div class="meta-row">
             <span class="source-tag">${escapeHtml(item.sourceName)}</span>
             ${dateLabel ? `<span class="date-tag">${escapeHtml(dateLabel)}</span>` : ""}
-            ${item.extraLabel ? `<span class="date-tag">${escapeHtml(item.extraLabel)}</span>` : ""}
           </div>
         </li>
       `;
@@ -1248,9 +867,7 @@ function isBuiltinSection(id) {
 }
 
 function renderSettingsPanel() {
-  // الأقسام الخاصة (يوتيوب، متابعة المسلسلات) لا تعتمد على مصادر RSS،
-  // ولها واجهة إدارة خاصة بها داخل قسمها مباشرة، فلا تظهر هنا.
-  const sections = getEffectiveSections().filter((s) => !isBuiltinSection(s.id) || s.type === "rss");
+  const sections = getEffectiveSections();
 
   // قائمة اختيار الموضوع الهدف عند إضافة مصدر
   feedTargetTopicSelect.innerHTML = sections
