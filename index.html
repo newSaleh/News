@@ -439,6 +439,16 @@ const BUILTIN_SECTIONS = [
       { name: "Daily Cannon", url: "https://www.dailycannon.com/feed/" },
     ],
   },
+  {
+    id: "sports",
+    title: "أخبار رياضية",
+    icon: "🏅",
+    feeds: [
+      // خلاصة FotMob عامة (كل كرة القدم)، وليست خاصة بفريق معيّن —
+      // لا توجد لديهم خلاصة مفلترة حسب فريق واحد.
+      { name: "FotMob", url: "https://www.fotmob.com/topnews/feed?format=rss" },
+    ],
+  },
   // مثال لإضافة قسم جديد بشكل دائم في الكود:
   // {
   //   id: "tech",
